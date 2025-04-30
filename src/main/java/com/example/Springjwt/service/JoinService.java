@@ -41,7 +41,7 @@ public class JoinService {
         // 비밀번호를 암호화하여 설정
         data.setPassword(bCryptPasswordEncoder.encode(password));
 
-        // 기본 권한 설정 (예: ROLE_ADMIN)
+        // 기본 권한 설정 (ROLE_ADMIN)
         data.setRole("ROLE_ADMIN");
 
         // 회원 정보(3개 필드: username, password, role)를 DB에 저장

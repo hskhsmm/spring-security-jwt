@@ -1,57 +1,83 @@
 package com.example.Springjwt.config;
 
-// 시큐리티 설정에 필요한 클래스들을 import
+import com.example.Springjwt.jwt.LoginFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
-@Configuration // 이 클래스가 설정 클래스라는 걸 Spring에게 알림
-@EnableWebSecurity // Spring Security 활성화 어노테이션
+@Configuration // 이 클래스가 설정 파일임을 명시 (스프링 빈 등록 대상)
+@EnableWebSecurity // Spring Security 활성화 (웹 보안 활성화)
 public class SecurityConfig {
 
-    // 비밀번호를 암호화하는 데 사용하는 BCryptPasswordEncoder를 Bean으로 등록
+    // AuthenticationManager를 생성하기 위해 필요한 AuthenticationConfiguration을 주입받음
+    private final AuthenticationConfiguration authenticationConfiguration;
+
+    public SecurityConfig(AuthenticationConfiguration authenticationConfiguration) {
+        this.authenticationConfiguration = authenticationConfiguration;
+    }
+
+    /**
+     * AuthenticationManager를 Bean으로 등록
+     * - Spring Security 5.7 이후에는 직접 AuthenticationManager를 설정해야 한다.
+     * - LoginFilter에서 인증 처리를 위해 필요
+     */
+    @Bean
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration configuration) throws Exception {
+        return configuration.getAuthenticationManager(); // 내부적으로 ProviderManager 반환
+    }
+
+    /**
+     * BCryptPasswordEncoder를 Bean으로 등록
+     * - 비밀번호 암호화 및 매칭 시 사용됨
+     */
     @Bean
     public BCryptPasswordEncoder bCryptPasswordEncoder() {
         return new BCryptPasswordEncoder();
     }
 
-    // 시큐리티 필터 체인을 설정하는 Bean
+    /**
+     * SecurityFilterChain 정의
+     * - HTTP 요청에 대한 보안 설정의 핵심
+     */
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 
-        // 1. CSRF 보안 기능 비활성화
-        // JWT를 사용하는 경우, 세션/쿠키 기반이 아니라서 CSRF 보호가 필요 없음
+        // CSRF 비활성화 (JWT 기반 인증이므로 필요 없음)
         http.csrf((auth) -> auth.disable());
 
-        // 2. 기본 제공 로그인 폼 기능 비활성화
-        // 우리는 REST API 방식으로 로그인할 예정이므로 formLogin은 꺼준다
+        // form 로그인 방식 비활성화 (우리는 로그인 페이지를 제공하지 않음)
         http.formLogin((auth) -> auth.disable());
 
-        // 3. HTTP Basic 인증 방식 비활성화
-        // 브라우저 팝업창 로그인 방식도 사용하지 않을 예정이므로 꺼준다
+        // HTTP 기본 인증 비활성화 (Authorization 헤더에 ID/PW 보내는 방식 비활성화)
         http.httpBasic((auth) -> auth.disable());
 
-        // 4. URL 접근 권한 설정
+        // 요청 URL에 따른 접근 권한 설정
         http.authorizeHttpRequests((auth) -> auth
-                // 로그인, 회원가입, 메인 페이지는 인증 없이 접근 가능
+                // 로그인, 회원가입, 루트 경로는 누구나 접근 가능
                 .requestMatchers("/login", "/", "/join").permitAll()
-                // /admin 경로는 ADMIN 권한이 있어야 접근 가능
-                .requestMatchers("/admin").hasRole("ADMIN")
-                // 위에 명시되지 않은 모든 요청은 인증이 필요함
+                // 그 외 모든 요청은 인증 필요
                 .anyRequest().authenticated()
         );
 
-        // 5. 세션 관리 정책 설정
-        // JWT를 사용할 경우 서버에 세션 정보를 저장하지 않으므로 STATELESS로 설정
-        http.sessionManagement((session) ->
-                session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+        // 커스텀 로그인 필터(LoginFilter)를 UsernamePasswordAuthenticationFilter 위치에 추가
+        // LoginFilter는 JWT 인증을 처리하고, 인증 성공 시 토큰을 응답해줌
+        http.addFilterAt(
+                new LoginFilter(authenticationManager(authenticationConfiguration)),
+                UsernamePasswordAuthenticationFilter.class
         );
 
-        // 모든 설정을 적용한 SecurityFilterChain 객체를 반환
-        return http.build();
+        // 세션 사용하지 않음 (JWT 방식에서는 STATELESS 정책 설정 필수)
+        http.sessionManagement((session) -> session
+                .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+        );
+
+        return http.build(); // 최종 보안 설정을 빌드하여 필터 체인 생성
     }
 }
