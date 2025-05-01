@@ -62,6 +62,7 @@ public class SecurityConfig {
         http.authorizeHttpRequests((auth) -> auth
                 // 로그인, 회원가입, 루트 경로는 누구나 접근 가능
                 .requestMatchers("/login", "/", "/join").permitAll()
+                .requestMatchers("/admin").hasRole("ADMIN")
                 // 그 외 모든 요청은 인증 필요
                 .anyRequest().authenticated()
         );
