@@ -7,4 +7,6 @@ public interface UserRepository extends JpaRepository<UserEntity, Integer> {
 
     //existby 쿼리 절을 사용. username을 기반으로.
     Boolean existsByUsername(String username);
+
+    UserEntity findByUsername(String username);
 }
